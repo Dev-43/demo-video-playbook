@@ -1,0 +1,92 @@
+name: Validate Skill
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Skill Structure Audit
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run skill audit
+        run: python scripts/check_skill.py
+
+      - name: Check SKILL.md frontmatter
+        run: |
+          python - <<'EOF'
+          import sys
+
+          with open("SKILL.md", "r") as f:
+              content = f.read()
+
+          if not content.startswith("---"):
+              print("ERROR: SKILL.md must start with YAML frontmatter")
+              sys.exit(1)
+
+          if "name:" not in content:
+              print("ERROR: SKILL.md missing 'name:' field")
+              sys.exit(1)
+
+          if "description:" not in content:
+              print("ERROR: SKILL.md missing 'description:' field")
+              sys.exit(1)
+
+          print("SKILL.md frontmatter is valid")
+          EOF
+
+      - name: Check all reference files exist
+        run: |
+          files=(
+            "references/modes.md"
+            "references/proof-patterns.md"
+            "references/workflow.md"
+            "references/capture.md"
+            "references/templates.md"
+            "references/review-rubric.md"
+          )
+          for f in "${files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Missing required file: $f"
+              exit 1
+            fi
+            echo "OK: $f"
+          done
+
+      - name: Check examples exist
+        run: |
+          files=(
+            "examples/nexus-demo.md"
+            "examples/agent-tool-demo.md"
+            "examples/hackathon-submission.md"
+          )
+          for f in "${files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Missing example file: $f"
+              exit 1
+            fi
+            echo "OK: $f"
+          done
+
+      - name: Check evals exist
+        run: |
+          if [ ! -f "evals/cases.md" ]; then
+            echo "ERROR: Missing evals/cases.md"
+            exit 1
+          fi
+          count=$(grep -c "## Case " evals/cases.md || true)
+          echo "Found $count eval cases"
+          if [ "$count" -lt 3 ]; then
+            echo "WARNING: Fewer than 3 eval cases"
+          fi
